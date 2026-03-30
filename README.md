@@ -121,7 +121,7 @@ Optional: integrate [semantic-release](https://semantic-release.gitbook.io/) or 
 
 ### Deploy a specific version (release pipeline)
 
-Use the **Release — deploy by image version** workflow ([.github/workflows/release_deploy.yml](.github/workflows/release_deploy.yml)):
+Use the **Release - deploy by image version** workflow ([.github/workflows/release_deploy.yml](.github/workflows/release_deploy.yml)):
 
 1. In GitHub: **Actions** → **Release — deploy by image version** → **Run workflow**.
 2. Set **image_version** to an immutable tag from GHCR (for example `build-42`, `sha-a1b2c3d`, or `1.2.0`).

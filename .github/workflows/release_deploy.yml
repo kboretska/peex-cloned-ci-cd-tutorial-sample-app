@@ -1,6 +1,7 @@
 # On-demand release: deploy a specific image tag from GHCR, or roll back by choosing an older tag.
 # Rollback does not rebuild the image — it pulls an immutable tag already stored in the registry.
-name: Release — deploy by image version
+# Use ASCII in `name` only — Unicode punctuation (e.g. em dash) can prevent the workflow from appearing in the Actions UI on some setups.
+name: Release - deploy by image version
 
 on:
   workflow_dispatch:
@@ -8,11 +9,10 @@ on:
       image_version:
         description: 'Image tag to deploy (e.g. build-42, sha-abc1234, 1.2.3, or latest)'
         required: true
-        type: string
       deployment_label:
         description: 'Optional label for logs (e.g. production, staging, rollback-to-build-41)'
         required: false
-        default: 'manual'
+        default: manual
 
 permissions:
   contents: read
