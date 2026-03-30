@@ -20,7 +20,7 @@ Also:
 
 ## Requirements
 
- * `Python 3.8`
+ * `Python 3.8` (recommended for local runs; **3.12+** may fail with the pinned **Werkzeug 1.x** stack required by Flask 1.1.x — CI uses 3.8)
  * `Pip`
  * `virtualenv`, or `conda`, or `miniconda`
 
