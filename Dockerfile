@@ -1,5 +1,10 @@
 FROM ubuntu:18.04
 
+ARG APP_VERSION=unknown
+ARG GIT_COMMIT_SHORT=unknown
+ENV APP_VERSION=${APP_VERSION}
+ENV GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
+
 RUN apt-get update && \
     apt-get -y upgrade && \
     DEBIAN_FRONTEND=noninteractive apt-get install -yq libpq-dev gcc python3.8 python3-pip && \

@@ -1,0 +1,74 @@
+# On-demand release: deploy a specific image tag from GHCR, or roll back by choosing an older tag.
+# Rollback does not rebuild the image — it pulls an immutable tag already stored in the registry.
+name: Release — deploy by image version
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_version:
+        description: 'Image tag to deploy (e.g. build-42, sha-abc1234, 1.2.3, or latest)'
+        required: true
+        type: string
+      deployment_label:
+        description: 'Optional label for logs (e.g. production, staging, rollback-to-build-41)'
+        required: false
+        default: 'manual'
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  deploy:
+    name: Deploy selected version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Image reference
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${{ inputs.image_version }}" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull immutable artifact
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          echo "::notice::Deployment label: ${{ inputs.deployment_label }}"
+          echo "::notice::Pulling $IMAGE"
+          docker pull "$IMAGE"
+
+      - name: Run container and verify (smoke)
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          docker rm -f app-release-smoke 2>/dev/null || true
+          docker run -d --name app-release-smoke -p 8000:8000 "$IMAGE"
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/ >/dev/null; then break; fi
+            sleep 1
+          done
+          echo "::group::GET /version (traceability)"
+          curl -sf http://127.0.0.1:8000/version | tee version.json
+          echo "::endgroup::"
+          docker stop app-release-smoke
+          docker rm app-release-smoke
+
+      - name: Summary
+        run: |
+          echo "## Deployed image" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Registry | \`${{ env.REGISTRY }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`${{ env.IMAGE_NAME }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tag (immutable ref) | \`${{ env.IMAGE_TAG }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Deployment label | \`${{ inputs.deployment_label }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "To **roll back**, run this workflow again with an older tag (e.g. previous \`build-*\` or \`sha-*\`). No rebuild required." >> "$GITHUB_STEP_SUMMARY"
