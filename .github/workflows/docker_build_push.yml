@@ -1,6 +1,7 @@
 # CI: lint, test, build and push a versioned image to GitHub Container Registry (GHCR).
 # Tags: semantic version (from Git tags v*.*.*), immutable build-<run_number>, sha-<short>,
 # and latest on the default branch only. See README — Versioning and releases.
+# Feedback: use GitHub notifications + email (Settings → Notifications → Actions); no webhooks in-repo.
 name: CI — test and push versioned Docker image
 
 on:

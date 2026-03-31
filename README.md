@@ -1,5 +1,9 @@
 # CD/CI Tutorial Sample Application ⚙
 
+<!-- Badges: replace YOUR_GITHUB_USER and YOUR_REPO_NAME with your GitHub username and repository name. They reflect the latest workflow run on the default branch. -->
+[![CI — test and push](https://github.com/YOUR_GITHUB_USER/YOUR_REPO_NAME/actions/workflows/docker_build_push.yml/badge.svg)](https://github.com/YOUR_GITHUB_USER/YOUR_REPO_NAME/actions/workflows/docker_build_push.yml)
+[![Release deploy](https://github.com/YOUR_GITHUB_USER/YOUR_REPO_NAME/actions/workflows/release_deploy.yml/badge.svg)](https://github.com/YOUR_GITHUB_USER/YOUR_REPO_NAME/actions/workflows/release_deploy.yml)
+
 **NOTE:** This code was written for an
 [article](https://medium.com/rockedscience/docker-ci-cd-pipeline-with-github-actions-6d4cd1731030)
 in the **RockedScience** publication on Medium.
@@ -17,6 +21,46 @@ It demonstrates how to:
 Also:
 
  * How to use [GitHub Actions](https://github.com/features/actions)
+
+## CI/CD feedback loop (badges, GitHub notifications, and email)
+
+### Status badges
+
+The badges at the top of this README link to GitHub Actions and **update automatically** after each run (passing / failing / pending). They refer to workflow **files** (`docker_build_push.yml`, `release_deploy.yml`), not the human-readable workflow titles.
+
+- **Green** — last run of that workflow succeeded.
+- **Red** — last run failed.
+- **Yellow / pending** — a run is in progress (or GitHub is still refreshing the badge).
+
+Replace `YOUR_GITHUB_USER` / `YOUR_REPO_NAME` in the badge URLs with your fork so the images resolve.
+
+### GitHub notifications and email (no extra secrets in the repo)
+
+This project relies on **GitHub’s built-in** notifications for workflow runs. You do **not** need Slack/Teams webhooks or SMTP secrets in the repository.
+
+**Who gets notified:** typically the user who **triggered** the workflow (for example the author of the push) and people **watching** the repository, depending on [notification settings](https://docs.github.com/en/account-and-profile/managing-subscriptions-and-notifications-on-github/setting-up-notifications/configuring-notifications).
+
+**Email**
+
+1. Use a **verified** email on your GitHub account: **Settings (profile) → Emails**.
+2. Open **Settings → Notifications** ([direct link](https://github.com/settings/notifications)).
+3. Under **Actions**, choose how you want to be notified (for example **Send notifications for failed workflows only** to reduce noise, or include successes if you need them for coursework).
+4. Ensure **Email** is enabled for the notification types you care about (participating, watching, etc.).
+
+**In-app (bell) and mobile**
+
+- The **Notifications** inbox on GitHub shows workflow-related items when you participate or watch the repo.
+- Install the **GitHub mobile app** and enable push notifications if you want alerts on your phone.
+
+**Watching this repository**
+
+- On the repo page, use **Watch → Participating** or **All Activity** to control how many events create notifications. For a small project, **Participating** plus Actions email for failures is usually enough.
+
+**What you get:** GitHub sends **concise** emails or web notifications with a link to the workflow run (logs, branch, commit). **Secrets are never included** in those messages.
+
+**CI vs CD in terms of notifications:** any failed job in **CI — test and push…** or **Release - deploy…** can trigger a failure notification to subscribers, depending on your settings. Successful runs can be muted via “failed only” for Actions.
+
+**Coursework / evidence:** screenshot your **Notification settings** (Actions section), a **badge** in passing and failing states, and an **email** or **GitHub Notifications** inbox entry after a failed run (temporarily break a test, then revert).
 
 ## Requirements
 

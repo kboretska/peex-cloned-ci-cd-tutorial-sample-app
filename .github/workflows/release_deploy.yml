@@ -1,5 +1,6 @@
 # On-demand release: deploy a specific image tag from GHCR, or roll back by choosing an older tag.
 # Rollback does not rebuild the image — it pulls an immutable tag already stored in the registry.
+# Feedback: GitHub notifications + email for workflow failures/successes — see README (Settings → Notifications).
 # Use ASCII in `name` only — Unicode punctuation (e.g. em dash) can prevent the workflow from appearing in the Actions UI on some setups.
 name: Release - deploy by image version
 
@@ -26,6 +27,8 @@ jobs:
     name: Deploy selected version
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Image reference
         run: |
           echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
