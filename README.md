@@ -1,8 +1,8 @@
 # CD/CI Tutorial Sample Application ⚙
 
-<!-- Badges: replace YOUR_GITHUB_USER and YOUR_REPO_NAME with your GitHub username and repository name. They reflect the latest workflow run on the default branch. -->
-[![CI — test and push](https://github.com/YOUR_GITHUB_USER/YOUR_REPO_NAME/actions/workflows/docker_build_push.yml/badge.svg)](https://github.com/YOUR_GITHUB_USER/YOUR_REPO_NAME/actions/workflows/docker_build_push.yml)
-[![Release deploy](https://github.com/YOUR_GITHUB_USER/YOUR_REPO_NAME/actions/workflows/release_deploy.yml/badge.svg)](https://github.com/YOUR_GITHUB_USER/YOUR_REPO_NAME/actions/workflows/release_deploy.yml)
+<!-- Workflow status badges (оновлюються після кожного запуску Actions на default branch). -->
+[![CI — test and push](https://github.com/kboretska/peex-cloned-ci-cd-tutorial-sample-app/actions/workflows/docker_build_push.yml/badge.svg)](https://github.com/kboretska/peex-cloned-ci-cd-tutorial-sample-app/actions/workflows/docker_build_push.yml)
+[![Release deploy](https://github.com/kboretska/peex-cloned-ci-cd-tutorial-sample-app/actions/workflows/release_deploy.yml/badge.svg)](https://github.com/kboretska/peex-cloned-ci-cd-tutorial-sample-app/actions/workflows/release_deploy.yml)
 
 **NOTE:** This code was written for an
 [article](https://medium.com/rockedscience/docker-ci-cd-pipeline-with-github-actions-6d4cd1731030)
@@ -32,7 +32,7 @@ The badges at the top of this README link to GitHub Actions and **update automat
 - **Red** — last run failed.
 - **Yellow / pending** — a run is in progress (or GitHub is still refreshing the badge).
 
-Replace `YOUR_GITHUB_USER` / `YOUR_REPO_NAME` in the badge URLs with your fork so the images resolve.
+If you fork this repo, edit the badge URLs above: `github.com/<owner>/<repo>/actions/workflows/<file>/badge.svg`.
 
 ### GitHub notifications and email (no extra secrets in the repo)
 
