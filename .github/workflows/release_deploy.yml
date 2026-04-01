@@ -32,7 +32,7 @@ jobs:
       - name: Image reference
         run: |
           echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-          echo "IMAGE_TAG=${{ inputs.image_version }}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${{ github.event.inputs.image_version }}" >> "$GITHUB_ENV"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -44,7 +44,7 @@ jobs:
       - name: Pull immutable artifact
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-          echo "::notice::Deployment label: ${{ inputs.deployment_label }}"
+          echo "::notice::Deployment label: ${{ github.event.inputs.deployment_label }}"
           echo "::notice::Pulling $IMAGE"
           docker pull "$IMAGE"
 
@@ -72,6 +72,6 @@ jobs:
           echo "| Registry | \`${{ env.REGISTRY }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Image | \`${{ env.IMAGE_NAME }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Tag (immutable ref) | \`${{ env.IMAGE_TAG }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Deployment label | \`${{ inputs.deployment_label }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Deployment label | \`${{ github.event.inputs.deployment_label }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "To **roll back**, run this workflow again with an older tag (e.g. previous \`build-*\` or \`sha-*\`). No rebuild required." >> "$GITHUB_STEP_SUMMARY"
