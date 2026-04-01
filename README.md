@@ -22,6 +22,59 @@ Also:
 
  * How to use [GitHub Actions](https://github.com/features/actions)
 
+## Third-party integrations (SonarCloud + artifact registry)
+
+This repository connects CI/CD to external services for **code quality** and **artifact storage**, with secrets kept only in GitHub **Actions secrets** (never committed).
+
+### 1. SonarCloud (code quality + Quality Gate)
+
+**Purpose:** static analysis, coverage reporting, security hotspots, and a **Quality Gate** that can **fail the workflow** if thresholds (bugs, vulnerabilities, coverage, etc.) are not met.
+
+| Item | Location |
+|------|----------|
+| Workflow | [.github/workflows/sonarcloud.yml](.github/workflows/sonarcloud.yml) |
+| Config | [sonar-project.properties](sonar-project.properties) |
+
+**One-time setup**
+
+1. Sign in at [sonarcloud.io](https://sonarcloud.io) (free for public repositories).
+2. **Create a project** by importing this GitHub repository (or bind it manually).
+3. Copy **Organization key** and **Project key** from SonarCloud (**Project → Administration → General**).
+4. Edit `sonar-project.properties` and replace `YOUR_SONARCLOUD_ORGANIZATION_KEY` and `YOUR_SONARCLOUD_PROJECT_KEY`.
+5. In SonarCloud: **My Account → Security** → generate a token; in GitHub: **Settings → Secrets and variables → Actions** → add **`SONAR_TOKEN`** (paste the token only there).
+6. Push to `master`/`main` or open a **pull request** — workflow **SonarCloud** runs tests with **coverage**, uploads results, and applies the **Quality Gate**. If the gate fails, the job fails and the PR shows a **failed check** with a link to SonarCloud.
+
+**Interpreting results**
+
+- **Pull request:** the **Checks** tab lists **SonarCloud**; the SonarCloud app adds a summary and a link to the full analysis.
+- **Quality Gate:** configured in SonarCloud (**Project → Quality Gates**). The default gate fails on new issues above policy; adjust for demos if needed.
+
+**Troubleshooting**
+
+| Problem | What to check |
+|---------|----------------|
+| `Project not found` / auth errors | `sonar.organization` / `sonar.projectKey` match SonarCloud; `SONAR_TOKEN` is valid and not expired. |
+| Scan succeeds but no PR comment | Public repo + SonarCloud GitHub app installed; allow a minute for decoration. |
+| Job always fails | Quality Gate too strict — temporarily relax conditions in SonarCloud or fix reported issues. |
+| Slow runs | Typical scan + tests stays **under a few minutes** for this small codebase. |
+
+**Testing pass vs fail:** fix code until the gate is green; to demonstrate failure, temporarily add duplicated code or lower coverage, push a branch, then revert.
+
+### 2. GitHub Container Registry (GHCR) — versioned artifacts
+
+**Purpose:** store **Docker images** produced by CI with immutable tags (`build-*`, `sha-*`, SemVer from Git tags). This satisfies the “artifact repository” requirement alongside SonarCloud.
+
+| Item | Location |
+|------|----------|
+| Workflow | [.github/workflows/docker_build_push.yml](.github/workflows/docker_build_push.yml) |
+| Images | **GitHub → Packages** for this repository |
+
+Authentication uses **`GITHUB_TOKEN`** in the workflow (scoped by GitHub; not stored in the repo). See also the **Versioning** section below.
+
+### 3. Security scanning (built-in)
+
+**CodeQL** runs in [.github/workflows/codeql-analysis.yml](.github/workflows/codeql-analysis.yml) and publishes results to the **Security** tab. This complements SonarCloud (different rules and UI).
+
 ## CI/CD feedback loop (badges, GitHub notifications, and email)
 
 ### Status badges
