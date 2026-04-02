@@ -40,6 +40,7 @@ class BasicTests(unittest.TestCase):
         self.assertEqual(response.mimetype, 'application/json')
         body = json.loads(response.data)
         self.assertIn('app_version', body)
+        self.assertIn('app_semver', body)
         self.assertIn('git_commit_short', body)
 
     def test_menu_empty(self):

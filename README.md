@@ -194,12 +194,14 @@ This repository implements **automated artifact versioning** in GitHub Actions: 
 
 ### Versioning scheme
 
-- **Semantic versioning (SemVer)** for releases: create an annotated or lightweight Git tag `vMAJOR.MINOR.PATCH` (for example `v1.2.0`). The CI pipeline tags the image with `1.2.0`, `1.2`, and the other tags below. Tags follow [Semantic Versioning 2.0.0](https://semver.org/).
-- **Build number**: each workflow run adds tag `build-<GITHUB_RUN_NUMBER>`. This number is unique and monotonic for the repository; it is **never reused**.
-- **Commit identity**: tag `sha-<short>` ties the image to the exact Git revision (short SHA). **Not overwritten** once pushed.
-- **`latest`**: moving pointer, updated only on pushes to the **default branch** (`master` or `main`). Use pinned tags (`build-*`, `sha-*`, or SemVer) for production rollouts.
+- **Application SemVer (`VERSION` file)** — у корені репозиторія файл [`VERSION`](VERSION) містить поточний **номер релізу додатку** (наприклад `0.1.0`). Його піднімаєш вручну при релізі (або автоматизацією). CI **не перезаписує** цей файл.
+- **Тег образу `MAJOR.MINOR.PATCH-build-<N>`** — для кожної збірки pipeline додає **immutable** тег на кшталт `0.1.0-build-42`: це **конкретний номер з `VERSION` + номер прогону GitHub Actions**. Так можна однозначно посилатися на «версію додатку + збірку».
+- **Semantic versioning з Git** — тег `vMAJOR.MINOR.PATCH` (наприклад `v1.2.0`) дає додаткові теги образу `1.2.0`, `1.2` через [docker/metadata-action](https://github.com/docker/metadata-action). Див. [SemVer](https://semver.org/).
+- **Build number**: тег `build-<GITHUB_RUN_NUMBER>` — унікальний для репозиторію.
+- **Commit identity**: тег `sha-<short>` прив’язує образ до коміту.
+- **`latest`**: рухомий покажчик на останній успішний билд на default branch.
 
-Version information is baked into the image as `APP_VERSION` (build number) and `GIT_COMMIT_SHORT`, and exposed at runtime via `GET /version` for logs and traceability.
+У контейнері в `GET /version` повертаються **`app_semver`** (з `VERSION`), **`app_version`** (повний рядок на кшталт `0.1.0-build-42`) та **`git_commit_short`**.
 
 ### How versions are generated
 
@@ -207,7 +209,9 @@ Version information is baked into the image as `APP_VERSION` (build number) and 
 2. [docker/build-push-action](https://github.com/docker/build-push-action) builds the `Dockerfile` and pushes to `ghcr.io/<owner>/<repo>` (name lowercased). `GITHUB_TOKEN` is used (`packages: write`).
 3. Pipeline logs print the image name, tag list, `BUILD_VERSION`, and full Git SHA (see step **Log published tags**).
 
-**First-time SemVer example** (after a successful CI push):
+**Bump the application version** — відредагуй [`VERSION`](VERSION) (наприклад `0.2.0`), закоміть і запуш; наступні образи отримають теги `0.2.0-build-<N>`.
+
+**Git tag for releases** (опційно, додаткові теги `1.x` на образі):
 
 ```sh
 git tag v0.1.0
@@ -221,7 +225,7 @@ Optional: integrate [semantic-release](https://semantic-release.gitbook.io/) or 
 Use the **Release - deploy by image version** workflow ([.github/workflows/release_deploy.yml](.github/workflows/release_deploy.yml)):
 
 1. In GitHub: **Actions** → **Release — deploy by image version** → **Run workflow**.
-2. Set **image_version** to an immutable tag from GHCR (for example `build-42`, `sha-a1b2c3d`, or `1.2.0`).
+2. Set **image_version** to an immutable tag from GHCR (for example `0.1.0-build-42`, `build-42`, `sha-a1b2c3d`, or SemVer `1.2.0` from a Git tag).
 3. Optionally set **deployment_label** (for example `production` or `rollback`).
 
 The job pulls the image from GHCR (no rebuild), runs a short smoke test, and prints `/version` in the logs. For a real environment, replace the smoke step with your target (Kubernetes `kubectl set image`, ECS task definition, VM pull/run, etc.) while keeping the same **pin by tag** rule.
