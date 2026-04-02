@@ -41,6 +41,7 @@ class BasicTests(unittest.TestCase):
         body = json.loads(response.data)
         self.assertIn('app_version', body)
         self.assertIn('app_semver', body)
+        self.assertIn('ci_run_number', body)
         self.assertIn('git_commit_short', body)
 
     def test_menu_empty(self):

@@ -14,6 +14,7 @@ def version():
 	return jsonify({
 		"app_version": os.environ.get("APP_VERSION", "unknown"),
 		"app_semver": os.environ.get("APP_SEMVER", "unknown"),
+		"ci_run_number": os.environ.get("CI_RUN_NUMBER", "unknown"),
 		"git_commit_short": os.environ.get("GIT_COMMIT_SHORT", "unknown"),
 	})
 

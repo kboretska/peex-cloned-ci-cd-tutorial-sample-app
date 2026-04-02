@@ -1,6 +1,6 @@
 # CI: lint, test, build and push a versioned image to GitHub Container Registry (GHCR).
-# Tags: semantic version (from Git tags v*.*.*), immutable build-<run_number>, sha-<short>,
-# and latest on the default branch only. See README — Versioning and releases.
+# Tags: SemVer from Git tags v*.*.*, immutable build-<N>, sha-<short>, latest.
+# APP_SEMVER from VERSION file is baked into the image (not repeated as 0.1.0-build-N on the registry).
 # Feedback: use GitHub notifications + email (Settings → Notifications → Actions); no webhooks in-repo.
 name: CI — test and push versioned Docker image
 
@@ -65,11 +65,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: SemVer from VERSION file + immutable tag (e.g. 0.1.0-build-42)
+      - name: SemVer from VERSION file (for image labels and /version)
         run: |
           V=$(tr -d '[:space:]' < VERSION 2>/dev/null || echo "0.0.0")
           echo "APP_SEMVER=$V" >> "$GITHUB_ENV"
-          echo "VERSION_TAG=${V}-build-${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
       - name: Image name (lowercase for GHCR)
         run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
@@ -84,7 +83,6 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ env.VERSION_TAG }},enable=true
             type=raw,value=${{ env.BUILD_VERSION }},enable=true
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
@@ -98,7 +96,6 @@ jobs:
             org.opencontainers.image.version=${{ env.APP_SEMVER }}
             ci.build-version=${{ env.BUILD_VERSION }}
             ci.app-semver=${{ env.APP_SEMVER }}
-            ci.version-tag=${{ env.VERSION_TAG }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -118,14 +115,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            APP_VERSION=${{ env.VERSION_TAG }}
+            APP_VERSION=${{ env.APP_SEMVER }}
             APP_SEMVER=${{ env.APP_SEMVER }}
             GIT_COMMIT_SHORT=${{ steps.git.outputs.short }}
+            CI_RUN_NUMBER=${{ github.run_number }}
 
       - name: Log published tags (traceability)
         run: |
           echo "::notice::Published image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           echo "::notice::Tags:" && echo '${{ steps.meta.outputs.tags }}' | tr ',' '\n'
-          echo "::notice::VERSION file (SemVer): ${{ env.APP_SEMVER }}"
-          echo "::notice::Immutable tag VERSION_TAG: ${{ env.VERSION_TAG }}"
+          echo "::notice::VERSION / app_semver: ${{ env.APP_SEMVER }}"
+          echo "::notice::CI run number (also in /version): ${{ github.run_number }}"
           echo "::notice::Git revision: ${{ github.sha }}"
