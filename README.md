@@ -102,7 +102,7 @@ Posts use [Incoming Webhooks](https://api.slack.com/messaging/webhooks) — no S
 2. In GitHub: **Settings → Secrets and variables → Actions → New repository secret** → name **`SLACK_WEBHOOK_URL`**, value = the webhook URL.
 3. Push to `main`/`master` or open a PR: workflows run [`.github/scripts/slack_notify.py`](.github/scripts/slack_notify.py) after CI/CD steps (skipped if the secret is unset).
 
-**What gets sent:** outcome (`success` / `failure` / …), repo, branch, short commit, actor, optional stage text, and a link to the workflow run. **Success** attachments are green; **failure** is red — different formats by outcome. **CI** and **CD** are separate messages (lint/tests vs Docker push vs manual release deploy), so you are not flooded on every commit with duplicate text.
+**What gets sent:** a [Block Kit](https://api.slack.com/block-kit) card — header title, two-column fields (status, branch, repo, commit, actor, workflow), optional notes, then a **Open workflow run** button and a small footer (`run` id / number). **Success** uses a green sidebar; **failure** red; **cancelled** amber. **CI** and **CD** are separate messages (lint/tests vs Docker push vs manual release deploy), so you are not flooded on every commit with duplicate text.
 
 **Security:** do not commit the webhook URL. Do not paste secrets into Slack messages from workflows. **Fork PRs** from untrusted forks do not receive repository secrets, so Slack notify steps are skipped there.
 
