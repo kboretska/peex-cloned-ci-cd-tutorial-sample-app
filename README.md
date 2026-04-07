@@ -22,6 +22,11 @@ Flask REST API sample used to learn CI/CD. Originally from this [Medium article]
 
 Fork the repo? Update the badge URLs to your `owner/repo`.
 
+### Status badges
+
+- **CI** — last run of [docker_build_push.yml](.github/workflows/docker_build_push.yml) (lint, tests, and on `push` also Docker push to GHCR). The SVG refreshes when a run finishes; open the badge link for history.
+- **Release** — last run of [release_deploy.yml](.github/workflows/release_deploy.yml) (manual deploy / smoke test). Until you run it once, it may show “no status” or neutral.
+
 ## Requirements
 
 - Python **3.8** (local use; 3.12+ may break with pinned Flask 1.x stack)
@@ -89,7 +94,21 @@ If the scan fails: check keys, token, and Quality Gate settings in SonarCloud.
 
 ## Notifications
 
-GitHub can email you or show in-app alerts when workflows fail or succeed. Configure under [GitHub notification settings](https://github.com/settings/notifications) → **Actions**. No extra secrets in the repo.
+### Slack (optional)
+
+Posts use [Incoming Webhooks](https://api.slack.com/messaging/webhooks) — no Slack token in the workflow file.
+
+1. In Slack: create an app or use **Incoming Webhooks**, pick a channel, copy the **Webhook URL**.
+2. In GitHub: **Settings → Secrets and variables → Actions → New repository secret** → name **`SLACK_WEBHOOK_URL`**, value = the webhook URL.
+3. Push to `main`/`master` or open a PR: workflows run [`.github/scripts/slack_notify.py`](.github/scripts/slack_notify.py) after CI/CD steps (skipped if the secret is unset).
+
+**What gets sent:** outcome (`success` / `failure` / …), repo, branch, short commit, actor, optional stage text, and a link to the workflow run. **Success** attachments are green; **failure** is red — different formats by outcome. **CI** and **CD** are separate messages (lint/tests vs Docker push vs manual release deploy), so you are not flooded on every commit with duplicate text.
+
+**Security:** do not commit the webhook URL. Do not paste secrets into Slack messages from workflows. **Fork PRs** from untrusted forks do not receive repository secrets, so Slack notify steps are skipped there.
+
+### GitHub (email / in-app)
+
+Configure under [GitHub notification settings](https://github.com/settings/notifications) → **Actions**. Works without repo secrets.
 
 ## Docker
 

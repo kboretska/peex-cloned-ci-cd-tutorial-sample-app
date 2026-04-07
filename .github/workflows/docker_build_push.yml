@@ -1,7 +1,7 @@
 # CI: lint, test, build and push a versioned image to GitHub Container Registry (GHCR).
 # Tags: SemVer from Git tags v*.*.*, immutable build-<N>, sha-<short>, latest.
 # APP_SEMVER from VERSION file is baked into the image (not repeated as 0.1.0-build-N on the registry).
-# Feedback: use GitHub notifications + email (Settings → Notifications → Actions); no webhooks in-repo.
+# Feedback: Slack (optional SLACK_WEBHOOK_URL secret) + GitHub email/notifications — see README.
 name: CI — test and push versioned Docker image
 
 on:
@@ -127,3 +127,45 @@ jobs:
           echo "::notice::VERSION / app_semver: ${{ env.APP_SEMVER }}"
           echo "::notice::CI run number (also in /version): ${{ github.run_number }}"
           echo "::notice::Git revision: ${{ github.sha }}"
+
+  slack-notify-ci:
+    name: Slack — CI (lint + tests)
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Notify Slack
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NOTIFY_OUTCOME: ${{ needs.test.result }}
+          NOTIFY_TITLE: 'CI — lint and tests'
+          NOTIFY_EXTRA: 'Stage: CI (no Docker push on pull_request).'
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 .github/scripts/slack_notify.py
+
+  slack-notify-cd:
+    name: Slack — CD (Docker push to GHCR)
+    needs: [build-and-push]
+    if: ${{ always() && needs.build-and-push.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Notify Slack
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NOTIFY_OUTCOME: ${{ needs.build-and-push.result }}
+          NOTIFY_TITLE: 'CD — Docker image push (GHCR)'
+          NOTIFY_EXTRA: 'Stage: CD (Docker image pushed to GitHub Container Registry).'
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 .github/scripts/slack_notify.py

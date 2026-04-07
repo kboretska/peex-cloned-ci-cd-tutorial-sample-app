@@ -1,6 +1,6 @@
 # On-demand release: deploy a specific image tag from GHCR, or roll back by choosing an older tag.
 # Rollback does not rebuild the image — it pulls an immutable tag already stored in the registry.
-# Feedback: GitHub notifications + email for workflow failures/successes — see README (Settings → Notifications).
+# Feedback: Slack (optional SLACK_WEBHOOK_URL) + GitHub notifications — see README.
 # Use ASCII in `name` only — Unicode punctuation (e.g. em dash) can prevent the workflow from appearing in the Actions UI on some setups.
 name: Release - deploy by image version
 
@@ -75,3 +75,24 @@ jobs:
           echo "| Deployment label | \`${{ github.event.inputs.deployment_label }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "To **roll back**, run this workflow again with an older tag (e.g. previous \`build-*\` or \`sha-*\`). No rebuild required." >> "$GITHUB_STEP_SUMMARY"
+
+  slack-notify-release:
+    name: Slack — CD (release deploy)
+    needs: [deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Notify Slack
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NOTIFY_OUTCOME: ${{ needs.deploy.result }}
+          NOTIFY_TITLE: 'CD — release deploy (smoke test)'
+          NOTIFY_EXTRA: 'Image tag: `${{ github.event.inputs.image_version }}`; label: `${{ github.event.inputs.deployment_label }}`'
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 .github/scripts/slack_notify.py
