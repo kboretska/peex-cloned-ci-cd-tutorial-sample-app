@@ -1,6 +1,7 @@
 # CI: lint, test, build and push a versioned image to GitHub Container Registry (GHCR).
 # Tags: SemVer from Git tags v*.*.*, immutable build-<N>, sha-<short>, latest.
 # APP_SEMVER from VERSION file is baked into the image (not repeated as 0.1.0-build-N on the registry).
+# Security: pip-audit (PyPI CVEs), Trivy (image), least-privilege job permissions — see README → Security.
 # Feedback: Slack (optional SLACK_WEBHOOK_URL secret) + GitHub email/notifications — see README.
 name: CI — test and push versioned Docker image
 
@@ -18,7 +19,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 env:
   REGISTRY: ghcr.io
@@ -26,6 +26,8 @@ env:
 jobs:
   test:
     name: Lint and test
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -41,8 +43,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8
+          pip install flake8 pip-audit
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Fail on CRITICAL Python CVEs (pip-audit + OSV CVSS)
+        run: |
+          pip install cvss
+          python .github/scripts/pip_audit_critical_gate.py
 
       - name: Lint with flake8
         run: |
@@ -56,6 +63,9 @@ jobs:
     name: Build and push to GHCR
     needs: test
     if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     env:
       BUILD_VERSION: build-${{ github.run_number }}
@@ -100,6 +110,31 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Build image (load, for Trivy scan)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ env.APP_SEMVER }}
+            APP_SEMVER=${{ env.APP_SEMVER }}
+            GIT_COMMIT_SHORT=${{ steps.git.outputs.short }}
+            CI_RUN_NUMBER=${{ github.run_number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image with Trivy (fail on CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
+          severity: CRITICAL
+          exit-code: "1"
+          format: table
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -119,6 +154,8 @@ jobs:
             APP_SEMVER=${{ env.APP_SEMVER }}
             GIT_COMMIT_SHORT=${{ steps.git.outputs.short }}
             CI_RUN_NUMBER=${{ github.run_number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Log published tags (traceability)
         run: |
@@ -132,6 +169,8 @@ jobs:
     name: Slack — CI (lint + tests)
     needs: [test]
     if: always()
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -153,6 +192,8 @@ jobs:
     name: Slack — CD (Docker push to GHCR)
     needs: [build-and-push]
     if: ${{ always() && needs.build-and-push.result != 'skipped' }}
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

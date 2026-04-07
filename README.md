@@ -11,6 +11,47 @@ Flask REST API sample used to learn CI/CD. Originally from this [Medium article]
 - Unit tests (`unittest`)
 - GitHub Actions: tests, Docker build, push to **GHCR**, optional **SonarCloud**, **CodeQL**
 
+## Security (CI/CD)
+
+This repo applies common controls suitable for GitHub Actions; adjust for your org’s policies.
+
+### Secrets and configuration
+
+- **No secrets in git.** Optional integrations use **GitHub Actions encrypted secrets** only: `SLACK_WEBHOOK_URL`, `SONAR_TOKEN`. The workflow uses `secrets.GITHUB_TOKEN` (ephemeral, scoped to the run) for GHCR — never pasted into logs by our scripts.
+- **Slack:** webhook URL lives only in **Settings → Secrets and variables → Actions**. The notify script does not print secret values.
+- **Retrieval / audit:** GitHub records secret *usage* at the org/repo level where your plan allows ([audit log](https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/reviewing-the-audit-log-for-your-organization) for orgs). Treat GitHub as the secret store for this pipeline.
+
+### Least privilege (`GITHUB_TOKEN`)
+
+Workflows declare minimal **`permissions`**. The main CI workflow defaults to `contents: read`; only the **Build and push to GHCR** job adds `packages: write`. Slack notification jobs stay on `contents: read` so they cannot push packages.
+
+### RBAC (who can change what)
+
+- **Branch protection** on `main`/`master`: required checks, optional required reviews — configure in **Settings → Branches** (repo or org).
+- **CODEOWNERS:** optional file to require review for `.github/workflows/` — add `@team` or `@username` your org trusts.
+- **Fork PRs:** workflows from forks do not receive your repository secrets, limiting abuse.
+
+### Scanning strategy
+
+| Layer | Tool | Where | Fail policy |
+|-------|------|--------|-------------|
+| SAST (Python) | **CodeQL** | [codeql-analysis.yml](.github/workflows/codeql-analysis.yml) | Findings in Security tab; configure required checks / code scanning rules in repo settings. |
+| Dependencies (PyPI) | **pip-audit** + **OSV** + **CVSS** | [docker_build_push.yml](.github/workflows/docker_build_push.yml) | [pip_audit_critical_gate.py](.github/scripts/pip_audit_critical_gate.py) fails the job if any advisory has **CVSS v3 base ≥ 9.0** (CRITICAL) per [OSV](https://osv.dev/). Other reported CVEs still appear in `pip-audit` JSON for remediation. |
+| Container image | **Trivy** | Same workflow after local image build | Fails on **CRITICAL** image vulns (`exit-code: 1`). |
+| Quality / policy | **SonarCloud** (optional) | [sonarcloud.yml](.github/workflows/sonarcloud.yml) | Quality Gate can fail the job when enabled. |
+
+**Dependabot** ([dependabot.yml](.github/dependabot.yml)) opens PRs for `pip` and **GitHub Actions** updates — proactive dependency hygiene (not a runtime scanner).
+
+### Artifacts (GHCR)
+
+Images go to **GitHub Container Registry** with permissions tied to repo/org roles. Private repos keep packages private by default; public repos expose images publicly — choose visibility under **Packages** settings.
+
+### Operations
+
+- **Review permissions** when adding new jobs (keep scopes minimal); re-check workflow `permissions` when GitHub adds features or you add integrations.
+- **Rotate** Sonar/Slack credentials if exposed; revoke in the upstream service and update GitHub secrets.
+- **Remediation:** if the CVSS gate or Trivy fails, bump dependencies or the base image (see [Dockerfile](Dockerfile)), then re-run CI. The image uses **`python:3.8-slim-bookworm`** instead of EOL Ubuntu 18.04 to reduce OS CVE noise and speed up patching.
+
 ## Workflows (short)
 
 | Workflow | Role |

@@ -1,4 +1,5 @@
-FROM ubuntu:18.04
+# Supported base image (avoid EOL Ubuntu releases; reduces OS-level CVE noise in scans).
+FROM python:3.8-slim-bookworm
 
 ARG APP_VERSION=unknown
 ARG APP_SEMVER=unknown
@@ -10,16 +11,15 @@ ENV GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
 ENV CI_RUN_NUMBER=${CI_RUN_NUMBER}
 
 RUN apt-get update && \
-    apt-get -y upgrade && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -yq libpq-dev gcc python3.8 python3-pip && \
-    apt-get clean
+    apt-get install -y --no-install-recommends libpq-dev gcc \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /sample-app
 
 COPY . /sample-app/
 
-RUN pip3 install -r requirements.txt && \
-    pip3 install -r requirements-server.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r requirements-server.txt
 
 ENV LC_ALL="C.UTF-8"
 ENV LANG="C.UTF-8"
