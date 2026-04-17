@@ -3,79 +3,109 @@
 [![CI](https://github.com/kboretska/peex-cloned-ci-cd-tutorial-sample-app/actions/workflows/docker_build_push.yml/badge.svg)](https://github.com/kboretska/peex-cloned-ci-cd-tutorial-sample-app/actions/workflows/docker_build_push.yml)
 [![Release](https://github.com/kboretska/peex-cloned-ci-cd-tutorial-sample-app/actions/workflows/release_deploy.yml/badge.svg)](https://github.com/kboretska/peex-cloned-ci-cd-tutorial-sample-app/actions/workflows/release_deploy.yml)
 
-Flask REST API sample used to learn CI/CD. Originally from this [Medium article](https://medium.com/rockedscience/docker-ci-cd-pipeline-with-github-actions-6d4cd1731030).
+Flask REST API sample for learning CI/CD pipelines. Based on ideas from this [Medium article](https://medium.com/rockedscience/docker-ci-cd-pipeline-with-github-actions-6d4cd1731030).
 
-## What it does
+---
 
-- REST API (Flask), SQLite/Postgres, Alembic migrations
-- Unit tests (`unittest`)
-- GitHub Actions: tests, Docker build, push to **GHCR**, optional **SonarCloud**, **CodeQL**
+## Overview
+
+| Area | Details |
+|------|---------|
+| **Application** | REST API (Flask), SQLite or Postgres, Alembic migrations |
+| **Tests** | Python `unittest` |
+| **CI/CD** | GitHub Actions: lint, tests, Docker build, push to **GHCR** |
+| **Optional** | **SonarCloud** analysis, **CodeQL** security scanning |
+
+---
 
 ## Security (CI/CD)
 
-This repo applies common controls suitable for GitHub Actions; adjust for your org’s policies.
+This repository applies controls that fit a typical GitHub Actions setup. Tune branch protection, Actions policies, and secrets to match your organization.
 
 ### Secrets and configuration
 
-- **No secrets in git.** Optional integrations use **GitHub Actions encrypted secrets** only: `SLACK_WEBHOOK_URL`, `SONAR_TOKEN`. The workflow uses `secrets.GITHUB_TOKEN` (ephemeral, scoped to the run) for GHCR — never pasted into logs by our scripts.
-- **Slack:** webhook URL lives only in **Settings → Secrets and variables → Actions**. The notify script does not print secret values.
-- **Retrieval / audit:** GitHub records secret *usage* at the org/repo level where your plan allows ([audit log](https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/reviewing-the-audit-log-for-your-organization) for orgs). Treat GitHub as the secret store for this pipeline.
+- **Nothing sensitive is committed to git.** Third-party tokens live in [GitHub Actions encrypted secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions) (for example `SLACK_WEBHOOK_URL`, `SONAR_TOKEN`).
+- **`GITHUB_TOKEN`** is short-lived and scoped by each workflow’s [`permissions`](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token). Workflows do not print it in logs.
+- **Slack:** the Incoming Webhook URL is loaded from the **`SLACK_WEBHOOK_URL`** secret via the [slack-webhook-env](.github/actions/slack-webhook-env/action.yml) composite action. The value is [masked](https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#masking-a-value-in-a-log) before use. If the secret is unset, Slack steps skip without failing the pipeline.
 
 ### Least privilege (`GITHUB_TOKEN`)
 
-Workflows declare minimal **`permissions`**. The main CI workflow defaults to `contents: read`; only the **Build and push to GHCR** job adds `packages: write`. Slack notification jobs stay on `contents: read` so they cannot push packages.
+Workflows declare the smallest `permissions` they need:
 
-### RBAC (who can change what)
+- Default: **`contents: read`**.
+- **Build and push to GHCR** adds **`packages: write`** only on that job.
+- **Manual release** uses **`packages: read`** only (pull image, smoke test).
+- Slack notification jobs use **`contents: read`** only (no `packages: write`).
 
-- **Branch protection** on `main`/`master`: required checks, optional required reviews — configure in **Settings → Branches** (repo or org).
-- **CODEOWNERS:** optional file to require review for `.github/workflows/` — add `@team` or `@username` your org trusts.
-- **Fork PRs:** workflows from forks do not receive your repository secrets, limiting abuse.
+### RBAC (who can change pipelines and artifacts)
+
+| Control | Purpose |
+|---------|---------|
+| **Branch protection** | On `main` / `master`: required status checks (CI, CodeQL, Sonar if used), optional required reviews — **Settings → Branches**. |
+| **[CODEOWNERS](.github/CODEOWNERS)** | Requires review for changes under `.github/workflows/` and `.github/actions/`. Replace `@kboretska` with your user or `@org/team`, then enable **Require review from Code Owners** if your org uses it. |
+| **Fork pull requests** | Workflows from forks do not receive your repository secrets, which limits abuse of notify steps. |
+| **`workflow_dispatch`** | [release_deploy.yml](.github/workflows/release_deploy.yml) is manual; restrict who can run workflows under **Settings → Actions → General** (org policies may apply). |
 
 ### Scanning strategy
 
-| Layer | Tool | Where | Fail policy |
-|-------|------|--------|-------------|
-| SAST (Python) | **CodeQL** | [codeql-analysis.yml](.github/workflows/codeql-analysis.yml) | Findings in Security tab; configure required checks / code scanning rules in repo settings. |
-| Dependencies (PyPI) | **pip-audit** + **OSV** + **CVSS** | [docker_build_push.yml](.github/workflows/docker_build_push.yml) | [pip_audit_critical_gate.py](.github/scripts/pip_audit_critical_gate.py) fails the job if any advisory has **CVSS v3 base ≥ 9.0** (CRITICAL) per [OSV](https://osv.dev/). Other reported CVEs still appear in `pip-audit` JSON for remediation. |
-| Container image | **Trivy** | Same workflow after local image build | Fails on **CRITICAL** image vulns (`exit-code: 1`). |
-| Quality / policy | **SonarCloud** (optional) | [sonarcloud.yml](.github/workflows/sonarcloud.yml) | Quality Gate can fail the job when enabled. |
+| Layer | Tool | Location | Fail policy |
+|-------|------|----------|-------------|
+| Secrets in history | **Gitleaks** | [docker_build_push.yml](.github/workflows/docker_build_push.yml) (`test` job) | Fails on detected secrets (`fetch-depth: 0` for history). |
+| SAST (Python) | **Bandit** | Same workflow | [bandit.yaml](bandit.yaml); **`-lll`** fails on **HIGH** and above. |
+| SAST (Python) | **CodeQL** | [codeql-analysis.yml](.github/workflows/codeql-analysis.yml) | Results in **Security → Code scanning**; use [protection rules](https://docs.github.com/en/code-security/code-scanning/managing-code-scanning-alerts/about-code-scanning#about-alert-severity) to block merges on new Critical/High alerts. |
+| Dependencies | **pip-audit** + OSV/CVSS | Same workflow | [pip_audit_critical_gate.py](.github/scripts/pip_audit_critical_gate.py) fails if any advisory has **CVSS v3 base ≥ 9.0**. |
+| Container image | **Trivy** | After local image build | Fails on **CRITICAL** (`exit-code: 1`). |
+| Quality (optional) | **SonarCloud** | [sonarcloud.yml](.github/workflows/sonarcloud.yml) | Quality Gate can fail the job. |
 
-**Dependabot** ([dependabot.yml](.github/dependabot.yml)) opens PRs for `pip` and **GitHub Actions** updates — proactive dependency hygiene (not a runtime scanner).
+**Dependabot** ([dependabot.yml](.github/dependabot.yml)) opens PRs for `pip` and GitHub Actions updates (supply-chain hygiene, not a runtime gate).
+
+**Performance:** Bandit, Gitleaks, and pip-audit run in the lightweight `test` job. Trivy runs only after a local image build on `push`. Severity is capped at **CRITICAL** for Trivy to balance signal versus runtime.
 
 ### Artifacts (GHCR)
 
-Images go to **GitHub Container Registry** with permissions tied to repo/org roles. Private repos keep packages private by default; public repos expose images publicly — choose visibility under **Packages** settings.
+Images are published to **GitHub Container Registry** with access tied to repository and organization roles. Private repositories keep packages private by default; adjust package visibility under **Packages** if needed. Release flow uses immutable-style tags (`build-*`, `sha-*`) for traceability and rollback — see [release_deploy.yml](.github/workflows/release_deploy.yml).
+
+### Audit and periodic review
+
+- **GitHub:** [Audit log](https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/reviewing-the-audit-log-for-your-organization) (organization or enterprise) records workflow and security events when enabled.
+- **Review cadence:** Re-check workflow `permissions`, branch protection, Code scanning rules, and third-party tokens when you add jobs or integrations.
 
 ### Operations
 
-- **Review permissions** when adding new jobs (keep scopes minimal); re-check workflow `permissions` when GitHub adds features or you add integrations.
-- **Rotate** Sonar/Slack credentials if exposed; revoke in the upstream service and update GitHub secrets.
-- **Remediation:** if the CVSS gate or Trivy fails, bump dependencies or the base image (see [Dockerfile](Dockerfile)), then re-run CI. The image uses **`python:3.8-slim-bookworm`** instead of EOL Ubuntu 18.04 to reduce OS CVE noise and speed up patching.
+- When adding jobs, extend `permissions` only as needed.
+- **Rotate** Slack or Sonar credentials if exposed; update the corresponding GitHub secret and revoke the old token in Slack or SonarCloud.
+- **Remediation:** If pip-audit’s CVSS gate or Trivy fails, upgrade dependencies or the base image ([Dockerfile](Dockerfile)), then re-run CI. The image uses **`python:3.8-slim-bookworm`** to reduce outdated OS CVE noise.
 
-## Workflows (short)
+---
+
+## Workflows
 
 | Workflow | Role |
 |----------|------|
-| [docker_build_push.yml](.github/workflows/docker_build_push.yml) | Lint, test, push versioned image to GHCR |
-| [release_deploy.yml](.github/workflows/release_deploy.yml) | Manual deploy: pull image tag + smoke test |
-| [sonarcloud.yml](.github/workflows/sonarcloud.yml) | Tests + coverage + SonarCloud (needs [setup](#sonarcloud)) |
-| [codeql-analysis.yml](.github/workflows/codeql-analysis.yml) | Security analysis |
+| [docker_build_push.yml](.github/workflows/docker_build_push.yml) | Lint, test, optional Docker push to GHCR |
+| [release_deploy.yml](.github/workflows/release_deploy.yml) | Manual: pull image tag from GHCR + smoke test |
+| [sonarcloud.yml](.github/workflows/sonarcloud.yml) | Tests, coverage, SonarCloud (see [SonarCloud](#sonarcloud-optional)) |
+| [codeql-analysis.yml](.github/workflows/codeql-analysis.yml) | CodeQL security analysis |
 
-Fork the repo? Update the badge URLs to your `owner/repo`.
+Forked this repo? Update badge URLs to your `owner/repo`.
 
 ### Status badges
 
-- **CI** — last run of [docker_build_push.yml](.github/workflows/docker_build_push.yml) (lint, tests, and on `push` also Docker push to GHCR). The SVG refreshes when a run finishes; open the badge link for history.
-- **Release** — last run of [release_deploy.yml](.github/workflows/release_deploy.yml) (manual deploy / smoke test). Until you run it once, it may show “no status” or neutral.
+- **CI** — last run of the main test and (on default-branch push) Docker push workflow.
+- **Release** — last run of the manual deploy workflow; may show neutral until you run it once.
 
-## Requirements
+---
 
-- Python **3.8** (local use; 3.12+ may break with pinned Flask 1.x stack)
-- pip, venv or conda
+## Local development
 
-For Postgres deps on Linux: `sudo apt-get install libpq-dev gcc`
+### Requirements
 
-## Install & database
+- Python **3.8** (newer Python may break the pinned Flask 1.x stack)
+- `pip`, venv or conda
+
+On Linux, for Postgres client libraries: `sudo apt-get install libpq-dev gcc`
+
+### Install and database
 
 ```sh
 python -m venv venv
@@ -90,13 +120,13 @@ flask db upgrade
 python seed.py
 ```
 
-## Tests
+### Tests
 
 ```sh
 python -m unittest discover
 ```
 
-## Run locally
+### Run locally
 
 ```sh
 flask run
@@ -109,47 +139,57 @@ pip install -r requirements-server.txt
 gunicorn app:app -b 0.0.0.0:8000
 ```
 
-`GET /version` returns app version fields and `ci_run_number` when built in CI.
+`GET /version` returns app version fields and `ci_run_number` when the image was built in CI.
 
-## Versioning & images
+---
 
-- **[VERSION](VERSION)** — app SemVer (e.g. `0.1.0`). Bump when you release.
-- **Image tags in GHCR:** `build-<run>`, `sha-<short>`, `latest` on default branch. Tags are immutable.
-- **SemVer image tags** (`0.1.0`, `0.1`): push a Git tag `v0.1.0` (after updating `VERSION` if you want them to match).
-- Do not push a bare `0.1.0` tag on every commit to `main` — it would overwrite the same tag.
+## Versioning and images
 
-## Release & rollback
+- **[VERSION](VERSION)** — application SemVer (for example `0.1.0`). Bump when you release.
+- **GHCR tags:** `build-<run_number>`, `sha-<short>`, `latest` on the default branch.
+- **SemVer image tags** (`0.1.0`, `0.1`): push a Git tag `v0.1.0` (after updating `VERSION` if you want them aligned).
+- Avoid pushing a bare `0.1.0` tag on every commit to `main`, or that tag will keep moving.
+
+---
+
+## Release and rollback
 
 1. **Actions** → **Release - deploy by image version** → **Run workflow**
-2. **image_version** = a tag from GHCR (`build-42`, `sha-xxx`, `0.1.0` if you released with `v0.1.0`, or `latest`)
-3. **Rollback:** run again with an older tag (no rebuild)
+2. **image_version** — a tag from GHCR (`build-42`, `sha-abc1234`, `0.1.0` if you released with `v0.1.0`, or `latest`)
+3. **Rollback:** run the workflow again with an older tag (no rebuild)
 
-## SonarCloud
+---
 
-1. Import this repo at [sonarcloud.io](https://sonarcloud.io) (free for public repos).
-2. **Disable Automatic Analysis** if you use CI (Project settings → Analysis method) — only one mode.
-3. Copy **Organization** and **Project** keys into [sonar-project.properties](sonar-project.properties).
-4. Create a token (SonarCloud → My Account → Security). Add **`SONAR_TOKEN`** in GitHub → **Settings → Secrets → Actions**.
+## SonarCloud (optional)
 
-If the scan fails: check keys, token, and Quality Gate settings in SonarCloud.
+1. Import the repository at [sonarcloud.io](https://sonarcloud.io) (free for public repos).
+2. **Disable Automatic Analysis** if you analyze only from GitHub Actions (Project settings → Analysis method).
+3. Set **Organization** and **Project** keys in [sonar-project.properties](sonar-project.properties).
+4. Create a token (SonarCloud → My Account → Security). Add **`SONAR_TOKEN`** under **Settings → Secrets and variables → Actions**.
+
+If the scan fails, verify keys, token, and Quality Gate settings in SonarCloud.
+
+---
 
 ## Notifications
 
 ### Slack (optional)
 
-Posts use [Incoming Webhooks](https://api.slack.com/messaging/webhooks) — no Slack token in the workflow file.
+Uses [Slack Incoming Webhooks](https://api.slack.com/messaging/webhooks) — no Slack bot token in the repo.
 
-1. In Slack: create an app or use **Incoming Webhooks**, pick a channel, copy the **Webhook URL**.
-2. In GitHub: **Settings → Secrets and variables → Actions → New repository secret** → name **`SLACK_WEBHOOK_URL`**, value = the webhook URL.
-3. Push to `main`/`master` or open a PR: workflows run [`.github/scripts/slack_notify.py`](.github/scripts/slack_notify.py) after CI/CD steps (skipped if the secret is unset).
+1. In Slack, enable **Incoming Webhooks** for a channel and copy the **Webhook URL**.
+2. In GitHub: **Settings → Secrets and variables → Actions** → create **`SLACK_WEBHOOK_URL`** with that URL.
+3. On push to `main` / `master` or on pull requests, workflows run [slack_notify.py](.github/scripts/slack_notify.py) after [slack-webhook-env](.github/actions/slack-webhook-env/action.yml) sets the env var (skipped when the secret is missing).
 
-**What gets sent:** a [Block Kit](https://api.slack.com/block-kit) card — header title, two-column fields (status, branch, repo, commit, actor, workflow), optional notes, then a **Open workflow run** button and a small footer (`run` id / number). **Success** uses a green sidebar; **failure** red; **cancelled** amber. **CI** and **CD** are separate messages (lint/tests vs Docker push vs manual release deploy), so you are not flooded on every commit with duplicate text.
+**Payload:** a [Block Kit](https://api.slack.com/block-kit) message (status, branch, repo, commit, actor, workflow, link to the run). CI and CD paths send separate messages so channels are not spammed with duplicates.
 
-**Security:** do not commit the webhook URL. Do not paste secrets into Slack messages from workflows. **Fork PRs** from untrusted forks do not receive repository secrets, so Slack notify steps are skipped there.
+**Security:** never commit the webhook URL. Fork PRs from untrusted forks do not receive repository secrets, so Slack notify steps are skipped there.
 
 ### GitHub (email / in-app)
 
-Configure under [GitHub notification settings](https://github.com/settings/notifications) → **Actions**. Works without repo secrets.
+Configure under [GitHub notification settings](https://github.com/settings/notifications) → **Actions**. No repository secrets required.
+
+---
 
 ## Docker
 
@@ -158,12 +198,14 @@ docker build -t app:local .
 docker run -p 8000:8000 app:local
 ```
 
-From GHCR after CI (replace owner/repo):
+After CI (replace `OWNER/REPO`):
 
 ```sh
 docker pull ghcr.io/OWNER/REPO:latest
 docker run -p 8000:8000 ghcr.io/OWNER/REPO:build-<N>
 ```
+
+---
 
 ## Heroku
 

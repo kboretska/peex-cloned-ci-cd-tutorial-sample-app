@@ -1,0 +1,4 @@
+# RBAC: workflow and composite-action changes require review before merge.
+# Replace the handle with your GitHub user or @org/team (Branch protection can require CODEOWNERS approval).
+/.github/workflows/ @kboretska
+/.github/actions/ @kboretska

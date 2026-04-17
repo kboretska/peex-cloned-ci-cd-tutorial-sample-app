@@ -1,0 +1,5 @@
+# SAST (Bandit): scope application code; skip tests, migrations, and CI helpers.
+exclude_dirs:
+  - tests
+  - migrations
+  - .github

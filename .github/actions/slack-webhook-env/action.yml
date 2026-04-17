@@ -1,0 +1,25 @@
+# Exposes SLACK_WEBHOOK_URL to later steps via GITHUB_ENV (slack_notify.py reads it).
+# Values are masked in logs. If the secret is empty, notify steps skip safely.
+name: Slack webhook env
+description: Load Slack Incoming Webhook URL from GitHub Actions secret into the environment
+
+inputs:
+  slack_webhook_url:
+    description: Repository secret SLACK_WEBHOOK_URL (Incoming Webhook URL from Slack)
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Slack webhook from GitHub Actions secret
+      shell: bash
+      env:
+        WH: ${{ inputs.slack_webhook_url }}
+      run: |
+        if [ -z "${WH:-}" ]; then
+          echo "Slack: SLACK_WEBHOOK_URL is not set — notify step will skip."
+          exit 0
+        fi
+        echo "::add-mask::$WH"
+        echo "SLACK_WEBHOOK_URL=$WH" >> "$GITHUB_ENV"

@@ -1,8 +1,8 @@
 # CI: lint, test, build and push a versioned image to GitHub Container Registry (GHCR).
 # Tags: SemVer from Git tags v*.*.*, immutable build-<N>, sha-<short>, latest.
 # APP_SEMVER from VERSION file is baked into the image (not repeated as 0.1.0-build-N on the registry).
-# Security: pip-audit (PyPI CVEs), Trivy (image), least-privilege job permissions — see README → Security.
-# Feedback: Slack (optional SLACK_WEBHOOK_URL secret) + GitHub email/notifications — see README.
+# Security: Gitleaks (secrets), Bandit (SAST HIGH+), pip-audit (PyPI CVEs), Trivy (image), least-privilege permissions — README → Security.
+# Optional Slack notifications via GitHub secret SLACK_WEBHOOK_URL — see README.
 name: CI — test and push versioned Docker image
 
 on:
@@ -34,17 +34,27 @@ jobs:
         python-version: ['3.8']
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret scan (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pip-audit
+          pip install bandit flake8 pip-audit
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: SAST — Bandit (fail on HIGH)
+        run: python -m bandit -c bandit.yaml -r app bootstrap.py seed.py -lll -q
 
       - name: Fail on CRITICAL Python CVEs (pip-audit + OSV CVSS)
         run: |
@@ -89,7 +99,7 @@ jobs:
 
       - name: Docker meta (tags and labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -136,7 +146,7 @@ jobs:
           format: table
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -174,10 +184,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve Slack webhook (GitHub secret)
+        uses: ./.github/actions/slack-webhook-env
+        with:
+          slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
       - name: Notify Slack
         continue-on-error: true
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           NOTIFY_OUTCOME: ${{ needs.test.result }}
           NOTIFY_TITLE: 'CI — lint and tests'
           NOTIFY_EXTRA: 'Stage: CI (no Docker push on pull_request).'
@@ -197,10 +210,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve Slack webhook (GitHub secret)
+        uses: ./.github/actions/slack-webhook-env
+        with:
+          slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
       - name: Notify Slack
         continue-on-error: true
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           NOTIFY_OUTCOME: ${{ needs.build-and-push.result }}
           NOTIFY_TITLE: 'CD — Docker image push (GHCR)'
           NOTIFY_EXTRA: 'Stage: CD (Docker image pushed to GitHub Container Registry).'

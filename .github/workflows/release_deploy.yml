@@ -1,6 +1,6 @@
 # On-demand release: deploy a specific image tag from GHCR, or roll back by choosing an older tag.
 # Rollback does not rebuild the image — it pulls an immutable tag already stored in the registry.
-# Feedback: Slack (optional SLACK_WEBHOOK_URL) + GitHub notifications — see README.
+# Optional Slack notifications via GitHub secret SLACK_WEBHOOK_URL — see README.
 # Use ASCII in `name` only — Unicode punctuation (e.g. em dash) can prevent the workflow from appearing in the Actions UI on some setups.
 name: Release - deploy by image version
 
@@ -35,7 +35,7 @@ jobs:
           echo "IMAGE_TAG=${{ github.event.inputs.image_version }}" >> "$GITHUB_ENV"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -80,13 +80,18 @@ jobs:
     name: Slack — CD (release deploy)
     needs: [deploy]
     if: always()
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve Slack webhook (GitHub secret)
+        uses: ./.github/actions/slack-webhook-env
+        with:
+          slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
       - name: Notify Slack
         continue-on-error: true
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           NOTIFY_OUTCOME: ${{ needs.deploy.result }}
           NOTIFY_TITLE: 'CD — release deploy (smoke test)'
           NOTIFY_EXTRA: 'Image tag: `${{ github.event.inputs.image_version }}`; label: `${{ github.event.inputs.deployment_label }}`'
