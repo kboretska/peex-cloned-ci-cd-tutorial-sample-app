@@ -10,7 +10,9 @@ ENV APP_SEMVER=${APP_SEMVER}
 ENV GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
 ENV CI_RUN_NUMBER=${CI_RUN_NUMBER}
 
+# Upgrade OS packages so Trivy sees patched Debian security versions (e.g. libsqlite3).
 RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     apt-get install -y --no-install-recommends libpq-dev gcc \
     && rm -rf /var/lib/apt/lists/*
 

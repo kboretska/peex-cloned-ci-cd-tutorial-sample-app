@@ -144,6 +144,9 @@ jobs:
           severity: CRITICAL
           exit-code: "1"
           format: table
+          # OS-only issues with no Debian package fix (e.g. zlib will_not_fix) would block CI forever.
+          ignore-unfixed: "true"
+          scanners: vuln
 
       - name: Log in to GHCR
         uses: docker/login-action@v4

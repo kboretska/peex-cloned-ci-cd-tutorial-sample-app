@@ -54,7 +54,7 @@ Workflows declare the smallest `permissions` they need:
 | SAST (Python) | **Bandit** | Same workflow | [bandit.yaml](bandit.yaml); **`-lll`** fails on **HIGH** and above. |
 | SAST (Python) | **CodeQL** | [codeql-analysis.yml](.github/workflows/codeql-analysis.yml) | Results in **Security → Code scanning**; use [protection rules](https://docs.github.com/en/code-security/code-scanning/managing-code-scanning-alerts/about-code-scanning#about-alert-severity) to block merges on new Critical/High alerts. |
 | Dependencies | **pip-audit** + OSV/CVSS | Same workflow | [pip_audit_critical_gate.py](.github/scripts/pip_audit_critical_gate.py) fails if any advisory has **CVSS v3 base ≥ 9.0**. |
-| Container image | **Trivy** | After local image build | Fails on **CRITICAL** (`exit-code: 1`). |
+| Container image | **Trivy** | After local image build | Fails on **CRITICAL** with a vendor fix (`exit-code: 1`). **`ignore-unfixed`** avoids blocking on Debian `will_not_fix` / no-package-yet OS issues; **`scanners: vuln`** limits the step to vulnerabilities (faster than full secret+vuln). The image **Dockerfile** runs **`apt-get upgrade`** so fixable OS CVEs are patched in the layer. |
 | Quality (optional) | **SonarCloud** | [sonarcloud.yml](.github/workflows/sonarcloud.yml) | Quality Gate can fail the job. |
 
 **Dependabot** ([dependabot.yml](.github/dependabot.yml)) opens PRs for `pip` and GitHub Actions updates (supply-chain hygiene, not a runtime gate).
