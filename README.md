@@ -24,18 +24,52 @@ This repository applies controls that fit a typical GitHub Actions setup. Tune b
 
 ### Secrets and configuration
 
-- **Nothing sensitive is committed to git.** Third-party tokens live in [GitHub Actions encrypted secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions) (for example `SLACK_WEBHOOK_URL`, `SONAR_TOKEN`).
+- **Nothing sensitive is committed to git.** Tokens and webhook URLs are never hardcoded in YAML or scripts.
 - **`GITHUB_TOKEN`** is short-lived and scoped by each workflow’s [`permissions`](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token). Workflows do not print it in logs.
-- **Slack:** the Incoming Webhook URL is loaded from the **`SLACK_WEBHOOK_URL`** secret via the [slack-webhook-env](.github/actions/slack-webhook-env/action.yml) composite action. The value is [masked](https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#masking-a-value-in-a-log) before use. If the secret is unset, Slack steps skip without failing the pipeline.
+- **Third-party secrets in GitHub:** [encrypted repository secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions) (for example `SONAR_TOKEN`, and optionally `SLACK_WEBHOOK_URL` as a fallback).
+- **Slack webhook:** resolved by [slack-webhook-env](.github/actions/slack-webhook-env/action.yml):
+  - **Preferred for coursework / cloud secret store:** read from **Azure Key Vault** using **OIDC** and a dedicated **Microsoft Entra application (service principal)** — no Azure client secret stored in GitHub (see [Azure workload identity and Key Vault](#azure-workload-identity-and-key-vault-slack-webhook)).
+  - **Fallback:** if the five Azure inputs below are not all set, the workflow uses **`SLACK_WEBHOOK_URL`** from GitHub secrets only.
+- Webhook values are [masked](https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#masking-a-value-in-a-log) in logs. If neither Key Vault nor `SLACK_WEBHOOK_URL` is available, Slack notify steps skip without failing the pipeline.
 
-### Least privilege (`GITHUB_TOKEN`)
+### Azure workload identity and Key Vault (Slack webhook)
+
+Use this path when you need a **cloud service account** with **IAM on Azure** (least privilege) and **auditable** secret access.
+
+**Concept:** you create an **App registration** in Microsoft Entra ID. It represents the CI “service principal”. You add a **federated credential** so GitHub Actions can obtain an Azure AD token via **OIDC** (no password in the repo). You grant that identity only **Key Vault Secrets User** on the vault that holds the Slack webhook string.
+
+**GitHub repository configuration** (`Settings → Secrets and variables → Actions`):
+
+| Type | Name | Purpose |
+|------|------|---------|
+| Secret | `AZURE_CLIENT_ID` | Application (client) ID of the Entra app used by GitHub Actions |
+| Secret | `AZURE_TENANT_ID` | Directory (tenant) ID |
+| Secret | `AZURE_SUBSCRIPTION_ID` | Subscription containing the Key Vault (used by `azure/login` scope) |
+| Variable | `AZURE_KEY_VAULT_NAME` | Vault **name** from the portal (short name, not `*.vault.azure.net`) |
+| Variable | `AZURE_KEY_VAULT_SECRET_NAME` | Name of the secret in Key Vault whose **value** is the full Slack Incoming Webhook URL |
+
+Slack jobs declare **`id-token: write`** so the OIDC token can be issued for `Azure/login@v2`.
+
+**Azure checklist (high level):**
+
+1. **Key Vault** — create a secret (e.g. `slack-incoming-webhook`); value = full `https://hooks.slack.com/...` URL from Slack.
+2. **Entra ID → App registrations → New registration** — name it e.g. `github-actions-ci-kv-read`; note **Application (client) ID** and **Directory (tenant) ID** for GitHub secrets above.
+3. **Certificates & secrets → Federated credentials → Add** — scenario **GitHub Actions**; set **Organization**, **Repository**, and optionally **Entity** (branch / environment). Issuer: `https://token.actions.githubusercontent.com`. See GitHub’s [OIDC in Azure](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-azure) for audience details.
+4. **Key Vault → Access control (IAM) → Add role assignment** — role **[Key Vault Secrets User](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#key-vault-secrets-user)** on **this vault** for the app’s **enterprise application** (same client ID). This is the **minimal** permission needed to read one secret for Slack.
+5. In GitHub, add the three **Secrets** and two **Variables** from the table.
+
+If you **omit** any of the five Azure values, CI falls back to **`SLACK_WEBHOOK_URL`** only (still secure, still not in git).
+
+### Least privilege (`GITHUB_TOKEN` and Azure)
 
 Workflows declare the smallest `permissions` they need:
 
 - Default: **`contents: read`**.
 - **Build and push to GHCR** adds **`packages: write`** only on that job.
 - **Manual release** uses **`packages: read`** only (pull image, smoke test).
-- Slack notification jobs use **`contents: read`** only (no `packages: write`).
+- Slack notification jobs use **`contents: read`** and **`id-token: write`** (OIDC to Azure when Key Vault is configured); they do **not** get `packages: write`.
+
+**Azure service principal:** only **Key Vault Secrets User** on the chosen vault (not Contributor on the subscription). Revisit IAM when you add new vaults or secrets.
 
 ### RBAC (who can change pipelines and artifacts)
 
@@ -68,12 +102,13 @@ Images are published to **GitHub Container Registry** with access tied to reposi
 ### Audit and periodic review
 
 - **GitHub:** [Audit log](https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/reviewing-the-audit-log-for-your-organization) (organization or enterprise) records workflow and security events when enabled.
-- **Review cadence:** Re-check workflow `permissions`, branch protection, Code scanning rules, and third-party tokens when you add jobs or integrations.
+- **Azure:** enable [Key Vault diagnostic logging](https://learn.microsoft.com/en-us/azure/key-vault/general/logging) to audit secret read operations; Entra sign-in / workload identity reports depend on tenant configuration.
+- **Review cadence:** Re-check workflow `permissions`, federated credential subjects (repo / branch / environment), Key Vault IAM, Code scanning rules, and third-party tokens when you add jobs or integrations.
 
 ### Operations
 
 - When adding jobs, extend `permissions` only as needed.
-- **Rotate** Slack or Sonar credentials if exposed; update the corresponding GitHub secret and revoke the old token in Slack or SonarCloud.
+- **Rotate** Slack or Sonar credentials if exposed; update the Key Vault secret value and/or **`SLACK_WEBHOOK_URL`** in GitHub, and revoke the old Slack webhook in Slack.
 - **Remediation:** If pip-audit’s CVSS gate or Trivy fails, upgrade dependencies or the base image ([Dockerfile](Dockerfile)), then re-run CI. The image uses **`python:3.8-slim-bookworm`** to reduce outdated OS CVE noise.
 
 ---
@@ -178,8 +213,10 @@ If the scan fails, verify keys, token, and Quality Gate settings in SonarCloud.
 Uses [Slack Incoming Webhooks](https://api.slack.com/messaging/webhooks) — no Slack bot token in the repo.
 
 1. In Slack, enable **Incoming Webhooks** for a channel and copy the **Webhook URL**.
-2. In GitHub: **Settings → Secrets and variables → Actions** → create **`SLACK_WEBHOOK_URL`** with that URL.
-3. On push to `main` / `master` or on pull requests, workflows run [slack_notify.py](.github/scripts/slack_notify.py) after [slack-webhook-env](.github/actions/slack-webhook-env/action.yml) sets the env var (skipped when the secret is missing).
+2. Choose one:
+   - **GitHub only:** add repository secret **`SLACK_WEBHOOK_URL`** with that URL, **or**
+   - **Azure Key Vault:** store the URL as a Key Vault secret and set all **`AZURE_*`** values in GitHub as described under [Azure workload identity and Key Vault](#azure-workload-identity-and-key-vault-slack-webhook) (OIDC + Entra app; no Azure password in the repo).
+3. On push to `main` / `master` or on pull requests, workflows run [slack_notify.py](.github/scripts/slack_notify.py) after [slack-webhook-env](.github/actions/slack-webhook-env/action.yml) resolves the webhook (skipped when no URL is available).
 
 **Payload:** a [Block Kit](https://api.slack.com/block-kit) message (status, branch, repo, commit, actor, workflow, link to the run). CI and CD paths send separate messages so channels are not spammed with duplicates.
 

@@ -1,6 +1,6 @@
 # On-demand release: deploy a specific image tag from GHCR, or roll back by choosing an older tag.
 # Rollback does not rebuild the image — it pulls an immutable tag already stored in the registry.
-# Optional Slack notifications via GitHub secret SLACK_WEBHOOK_URL — see README.
+# Optional Slack: Azure Key Vault (OIDC) or GitHub secret — README → Security.
 # Use ASCII in `name` only — Unicode punctuation (e.g. em dash) can prevent the workflow from appearing in the Actions UI on some setups.
 name: Release - deploy by image version
 
@@ -82,12 +82,18 @@ jobs:
     if: always()
     permissions:
       contents: read
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Resolve Slack webhook (GitHub secret)
+      - name: Resolve Slack webhook (Azure Key Vault or GitHub secret)
         uses: ./.github/actions/slack-webhook-env
         with:
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azure_key_vault_name: ${{ vars.AZURE_KEY_VAULT_NAME }}
+          azure_key_vault_secret_name: ${{ vars.AZURE_KEY_VAULT_SECRET_NAME }}
           slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
       - name: Notify Slack
         continue-on-error: true

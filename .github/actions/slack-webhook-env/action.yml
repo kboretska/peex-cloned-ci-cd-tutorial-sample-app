@@ -1,24 +1,66 @@
-# Exposes SLACK_WEBHOOK_URL to later steps via GITHUB_ENV (slack_notify.py reads it).
-# Values are masked in logs. If the secret is empty, notify steps skip safely.
+# Loads SLACK_WEBHOOK_URL into GITHUB_ENV for slack_notify.py.
+# (1) Azure Key Vault: GitHub OIDC → Entra app (workload identity) — no client secret in the repo
+# (2) Fallback: GitHub encrypted secret SLACK_WEBHOOK_URL
 name: Slack webhook env
-description: Load Slack Incoming Webhook URL from GitHub Actions secret into the environment
+description: Slack Incoming Webhook from Azure Key Vault (OIDC) or GitHub secret
 
 inputs:
+  azure_client_id:
+    description: Entra application (client) ID — with other Azure inputs enables Key Vault
+    required: false
+    default: ''
+  azure_tenant_id:
+    description: Entra directory (tenant) ID
+    required: false
+    default: ''
+  azure_subscription_id:
+    description: Azure subscription ID (scope for azure/login)
+    required: false
+    default: ''
+  azure_key_vault_name:
+    description: Key Vault short name (not FQDN)
+    required: false
+    default: ''
+  azure_key_vault_secret_name:
+    description: Name of the Key Vault secret whose value is the Slack webhook URL
+    required: false
+    default: ''
   slack_webhook_url:
-    description: Repository secret SLACK_WEBHOOK_URL (Incoming Webhook URL from Slack)
+    description: Used when Key Vault inputs are not all set (GitHub secret)
     required: false
     default: ''
 
 runs:
   using: composite
   steps:
+    - name: Azure Login (OIDC / federated credential)
+      if: ${{ inputs.azure_client_id != '' && inputs.azure_tenant_id != '' && inputs.azure_subscription_id != '' && inputs.azure_key_vault_name != '' && inputs.azure_key_vault_secret_name != '' }}
+      uses: Azure/login@v2
+      with:
+        client-id: ${{ inputs.azure_client_id }}
+        tenant-id: ${{ inputs.azure_tenant_id }}
+        subscription-id: ${{ inputs.azure_subscription_id }}
+
+    - name: Slack webhook from Azure Key Vault
+      if: ${{ inputs.azure_client_id != '' && inputs.azure_tenant_id != '' && inputs.azure_subscription_id != '' && inputs.azure_key_vault_name != '' && inputs.azure_key_vault_secret_name != '' }}
+      shell: bash
+      env:
+        VAULT: ${{ inputs.azure_key_vault_name }}
+        SNAME: ${{ inputs.azure_key_vault_secret_name }}
+      run: |
+        set -euo pipefail
+        SECRET=$(az keyvault secret show --vault-name "$VAULT" --name "$SNAME" --query value -o tsv)
+        echo "::add-mask::$SECRET"
+        echo "SLACK_WEBHOOK_URL=$SECRET" >> "$GITHUB_ENV"
+
     - name: Slack webhook from GitHub Actions secret
+      if: ${{ inputs.azure_client_id == '' || inputs.azure_tenant_id == '' || inputs.azure_subscription_id == '' || inputs.azure_key_vault_name == '' || inputs.azure_key_vault_secret_name == '' }}
       shell: bash
       env:
         WH: ${{ inputs.slack_webhook_url }}
       run: |
         if [ -z "${WH:-}" ]; then
-          echo "Slack: SLACK_WEBHOOK_URL is not set — notify step will skip."
+          echo "Slack: Key Vault not fully configured and SLACK_WEBHOOK_URL not set — notify step will skip."
           exit 0
         fi
         echo "::add-mask::$WH"
