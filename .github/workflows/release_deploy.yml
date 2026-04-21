@@ -27,7 +27,7 @@ jobs:
     name: Deploy selected version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Image reference
         run: |
@@ -85,7 +85,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Resolve Slack webhook (Azure Key Vault or GitHub secret)
         uses: ./.github/actions/slack-webhook-env
         with:

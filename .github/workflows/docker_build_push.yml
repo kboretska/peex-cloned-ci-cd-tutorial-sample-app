@@ -33,7 +33,7 @@ jobs:
       matrix:
         python-version: ['3.8']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -81,7 +81,7 @@ jobs:
       BUILD_VERSION: build-${{ github.run_number }}
     steps:
       - name: Check out repository (full history for semver tags)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -187,7 +187,7 @@ jobs:
       id-token: write # required for Azure OIDC when Key Vault path is configured
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Resolve Slack webhook (Azure Key Vault or GitHub secret)
         uses: ./.github/actions/slack-webhook-env
         with:
@@ -219,7 +219,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Resolve Slack webhook (Azure Key Vault or GitHub secret)
         uses: ./.github/actions/slack-webhook-env
         with:
