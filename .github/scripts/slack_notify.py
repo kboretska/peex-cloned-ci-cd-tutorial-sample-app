@@ -114,6 +114,12 @@ def main() -> int:
     if not url:
         print("Slack: SLACK_WEBHOOK_URL not set, skipping.")
         return 0
+    if not (url.startswith("https://") or url.startswith("http://")):
+        print(
+            "Slack: SLACK_WEBHOOK_URL must start with https:// or http:// (check Key Vault value or GitHub secret).",
+            file=sys.stderr,
+        )
+        return 1
 
     outcome = os.environ.get("NOTIFY_OUTCOME", "unknown")
     title = os.environ.get("NOTIFY_TITLE", "Workflow")

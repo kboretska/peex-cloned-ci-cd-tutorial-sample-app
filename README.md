@@ -45,8 +45,8 @@ Use this path when you need a **cloud service account** with **IAM on Azure** (l
 | Secret | `AZURE_CLIENT_ID` | Application (client) ID of the Entra app used by GitHub Actions |
 | Secret | `AZURE_TENANT_ID` | Directory (tenant) ID |
 | Secret | `AZURE_SUBSCRIPTION_ID` | Subscription containing the Key Vault (used by `azure/login` scope) |
-| Variable | `AZURE_KEY_VAULT_NAME` | Vault **name** from the portal (short name, not `*.vault.azure.net`) |
-| Variable | `AZURE_KEY_VAULT_SECRET_NAME` | Name of the secret in Key Vault whose **value** is the full Slack Incoming Webhook URL |
+| Variable (or secret) | `AZURE_KEY_VAULT_NAME` | Vault **name** from the portal (short name, not `*.vault.azure.net`). Store under **Variables** or **Secrets** (same name). |
+| Variable (or secret) | `AZURE_KEY_VAULT_SECRET_NAME` | Name of the secret in Key Vault whose **value** is the full Slack Incoming Webhook URL. Variables or Secrets. |
 
 Slack jobs declare **`id-token: write`** so the OIDC token can be issued for `Azure/login@v2`.
 
