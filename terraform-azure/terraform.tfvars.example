@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (never commit secrets).
+#
+# subscription_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+# Defaults: northeurope + Standard_D2s_v3 (change vm_size / location if SkuNotAvailable).
+# location = "swedencentral"
+# vm_size  = "Standard_B2s"
+#
+# Paste your SSH public key (ssh-ed25519 AAA... or ssh-rsa ...).
+# admin_ssh_public_key = "ssh-ed25519 AAAA..."
