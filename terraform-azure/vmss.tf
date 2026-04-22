@@ -47,7 +47,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
     apt-get update -y
     apt-get install -y cron stress-ng
 
-    # 11:00 Kyiv: one stressor per logical CPU, no --cpu-load cap (80% was capping load; use all cores).
+    # 10:30 Kyiv: one stressor per logical CPU, no --cpu-load cap; use all cores.
     printf '%s\n' '#!/bin/bash' 'exec stress-ng --cpu "$(nproc)" --timeout 1800' >/usr/local/bin/stress-kyiv-cron.sh
     chmod 0755 /usr/local/bin/stress-kyiv-cron.sh
 
@@ -55,7 +55,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
       'CRON_TZ=Europe/Kyiv' \
       'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
       '' \
-      '0 12 * * * root /usr/local/bin/stress-kyiv-cron.sh >> /var/log/vmss-stress-cron.log 2>&1' \
+      '30 10 * * * root /usr/local/bin/stress-kyiv-cron.sh >> /var/log/vmss-stress-cron.log 2>&1' \
       >/etc/cron.d/vmss-stress-kyiv
     chmod 0644 /etc/cron.d/vmss-stress-kyiv
     systemctl enable --now cron
